@@ -6,7 +6,7 @@ interface StatsRadarProps {
   stats: Stats;
 }
 
-const StatsRadar: React.FC<StatsRadarProps> = ({ stats }) => {
+const StatsRadar = ({ stats }: StatsRadarProps) => {
   const data = [
     { subject: 'STR', A: stats.str, fullMark: 50 },
     { subject: 'AGI', A: stats.agi, fullMark: 50 },
@@ -15,7 +15,7 @@ const StatsRadar: React.FC<StatsRadarProps> = ({ stats }) => {
   ];
 
   return (
-    <div className="w-full h-[250px] relative">
+    <div className="w-full relative" style={{ height: 250 }}>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
           <PolarGrid stroke="#374151" />
@@ -31,7 +31,7 @@ const StatsRadar: React.FC<StatsRadarProps> = ({ stats }) => {
           />
         </RadarChart>
       </ResponsiveContainer>
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/20 to-transparent" />
+      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black via-transparent to-transparent opacity-20" />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Award } from 'lucide-react';
+import { Lock, Award, RefreshCw } from 'lucide-react';
 import { LevelData, QuestType } from '../types';
 import { QUEST_EXP_MULTIPLIERS } from '../constants';
 import QuestItem from './QuestItem';
@@ -9,26 +9,35 @@ interface LevelViewProps {
   levelData: LevelData;
   completedQuests: string[];
   onQuestToggle: (id: string, type: QuestType) => void;
+  onRepeatQuest: (id: string, type: QuestType) => void;
   onLevelComplete: () => void;
+  onResetDailies: () => void;
   isPreviousLevelComplete: boolean;
   playerLevel: number;
 }
 
-const LevelView: React.FC<LevelViewProps> = ({ 
+const LevelView = ({ 
   levelData, 
   completedQuests, 
   onQuestToggle, 
+  onRepeatQuest,
   onLevelComplete,
+  onResetDailies,
   isPreviousLevelComplete,
   playerLevel
-}) => {
+}: LevelViewProps) => {
   // Logic to check completion
   const requiredQuests = levelData.quests.map(q => q.id);
   const isLevelComplete = requiredQuests.every(id => completedQuests.includes(id));
+  
+  // Check if there are any completed daily quests in this level
+  const hasCompletedDailies = levelData.quests.some(
+    q => q.type === QuestType.DAILY && completedQuests.includes(q.id)
+  );
 
   if (!isPreviousLevelComplete) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-gray-600">
+      <div className="flex flex-col items-center justify-center text-gray-600" style={{ height: '60vh' }}>
         <Lock className="w-16 h-16 mb-4 opacity-50" />
         <h2 className="text-xl font-mono uppercase tracking-widest">Level Locked</h2>
         <p className="text-sm">Complete previous level to access.</p>
@@ -64,7 +73,7 @@ const LevelView: React.FC<LevelViewProps> = ({
              <p className="text-system-gold font-sans">{levelData.duration}</p>
            </div>
         </div>
-        <div className="bg-system-panel/50 p-3 rounded border border-gray-800">
+        <div className="bg-system-panel-50 p-3 rounded border border-gray-800">
           <p className="text-sm text-gray-300 leading-relaxed">
             {levelData.description}
           </p>
@@ -73,9 +82,20 @@ const LevelView: React.FC<LevelViewProps> = ({
 
       {/* Quest List */}
       <div className="mb-8">
-        <h3 className="text-system-blue font-mono text-sm mb-4 border-b border-gray-800 pb-2 flex items-center gap-2">
-          <Award className="w-4 h-4" /> QUESTS
-        </h3>
+        <div className="flex justify-between items-end mb-4 border-b border-gray-800 pb-2">
+            <h3 className="text-system-blue font-mono text-sm flex items-center gap-2">
+            <Award className="w-4 h-4" /> QUESTS
+            </h3>
+            {hasCompletedDailies && (
+                <button 
+                    onClick={onResetDailies}
+                    className="flex items-center gap-1.5 text-xxs font-mono text-gray-400 hover:text-system-blue transition-colors border border-gray-800 hover:border-system-blue px-2 py-1 rounded bg-black"
+                >
+                    <RefreshCw className="w-3 h-3" /> RESET DAILIES
+                </button>
+            )}
+        </div>
+
         <div className="space-y-1">
           {levelData.quests.map((quest) => (
             <QuestItem 
@@ -83,6 +103,7 @@ const LevelView: React.FC<LevelViewProps> = ({
               quest={quest} 
               isCompleted={completedQuests.includes(quest.id)}
               onToggle={onQuestToggle}
+              onRepeat={onRepeatQuest}
               expReward={(QUEST_EXP_MULTIPLIERS[quest.type] || 0) * playerLevel}
             />
           ))}
@@ -99,7 +120,8 @@ const LevelView: React.FC<LevelViewProps> = ({
            >
              <button 
               onClick={onLevelComplete}
-              className="pointer-events-auto bg-system-blue text-black font-black text-xl py-4 px-12 rounded shadow-[0_0_30px_rgba(0,240,255,0.6)] animate-pulse-slow hover:scale-105 transition-transform uppercase"
+              className="pointer-events-auto bg-system-blue text-black font-black text-xl py-4 px-12 rounded animate-pulse-slow hover:scale-105 transition-transform uppercase"
+              style={{ boxShadow: '0 0 30px rgba(0,240,255,0.6)' }}
              >
                COMPLETE LEVEL {levelData.level}
              </button>

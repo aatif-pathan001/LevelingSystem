@@ -1,3 +1,4 @@
+
 export interface Stats {
   str: number;
   int: number;
@@ -28,6 +29,7 @@ export interface Quest {
   required?: boolean;
   attributes?: QuestAttributes;
   difficulty?: number;
+  rewardStats?: (keyof Stats)[];
 }
 
 export interface LevelData {
@@ -40,6 +42,7 @@ export interface LevelData {
   quests: Quest[];
   rewards: Stats;
   rankUp?: string; // e.g., "RANK D"
+  jobClassUp?: string; // e.g., "Hardware Engineer"
 }
 
 export interface PlayerState {
@@ -51,7 +54,10 @@ export interface PlayerState {
   customQuests: Quest[];
   stats: Stats;
   rank: string;
+  jobClass: string;
   inventoryAcquired: boolean;
+  acquiredInventory: string[]; // Array of Inventory Item names
+  unallocatedStats: number;
 }
 
 export interface InventoryItem {
@@ -59,4 +65,5 @@ export interface InventoryItem {
   description: string;
   approxCost: string;
   mandatory: boolean;
+  unlockLevel: number;
 }

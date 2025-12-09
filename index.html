@@ -2,61 +2,94 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#000000" />
     <title>System Interface</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use standard Tailwind v2 CSS for speed and reliability -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              mono: ['"Courier Prime"', 'monospace'],
-              sans: ['"Rajdhani"', 'sans-serif'],
-            },
-            colors: {
-              system: {
-                blue: '#00f0ff',
-                dark: '#0a0a0f',
-                panel: '#111118',
-                border: '#2a2a35',
-                gold: '#ffd700',
-                danger: '#ff003c'
-              }
-            },
-            animation: {
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'glow': 'glow 2s ease-in-out infinite alternate',
-            },
-            keyframes: {
-              glow: {
-                '0%': { boxShadow: '0 0 5px #00f0ff' },
-                '100%': { boxShadow: '0 0 20px #00f0ff, 0 0 10px #00f0ff' },
-              }
-            }
-          },
-        },
-      }
-    </script>
     <style>
       body {
         background-color: #050505;
         color: #e0e0e0;
+        overscroll-behavior-y: none;
       }
-      /* Custom scrollbar for the System feel */
-      ::-webkit-scrollbar {
-        width: 8px;
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #0a0a0f; }
+      ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+      /* Custom System Colors & Utilities */
+      :root {
+        --system-blue: #00f0ff;
+        --system-dark: #0a0a0f;
+        --system-panel: #111118;
+        --system-border: #2a2a35;
+        --system-gold: #ffd700;
+        --system-danger: #ff003c;
       }
-      ::-webkit-scrollbar-track {
-        background: #0a0a0f; 
+
+      .text-system-blue { color: var(--system-blue); }
+      .bg-system-blue { background-color: var(--system-blue); }
+      .border-system-blue { border-color: var(--system-blue); }
+      
+      .text-system-gold { color: var(--system-gold); }
+      .bg-system-gold { background-color: var(--system-gold); }
+      .border-system-gold { border-color: var(--system-gold); }
+      
+      .text-system-danger { color: var(--system-danger); }
+      .bg-system-danger { background-color: var(--system-danger); }
+      .border-system-danger { border-color: var(--system-danger); }
+      .border-system-danger-50 { border-color: rgba(255, 0, 60, 0.5); }
+      .bg-system-danger-10 { background-color: rgba(255, 0, 60, 0.1); }
+
+      .bg-system-panel { background-color: var(--system-panel); }
+      .bg-system-panel-50 { background-color: rgba(17, 17, 24, 0.5); }
+      
+      .border-system-border { border-color: var(--system-border); }
+
+      /* Custom Opacity Utilities for Specific Needs */
+      .bg-system-blue-5 { background-color: rgba(0, 240, 255, 0.05); }
+      .bg-system-blue-10 { background-color: rgba(0, 240, 255, 0.1); }
+      .bg-system-blue-30 { background-color: rgba(0, 240, 255, 0.3); }
+      .border-system-blue-30 { border-color: rgba(0, 240, 255, 0.3); }
+      .border-system-blue-50 { border-color: rgba(0, 240, 255, 0.5); }
+      
+      .bg-system-gold-5 { background-color: rgba(255, 215, 0, 0.05); }
+      .border-system-gold-30 { border-color: rgba(255, 215, 0, 0.3); }
+
+      /* Fonts */
+      .font-mono { font-family: "Courier Prime", monospace; }
+      .font-sans { font-family: "Rajdhani", sans-serif; }
+
+      /* Text Sizes */
+      .text-xxs { font-size: 10px; line-height: 1rem; }
+
+      /* Animations */
+      @keyframes pulse-slow {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
       }
-      ::-webkit-scrollbar-thumb {
-        background: #1f2937; 
-        border-radius: 4px;
+      .animate-pulse-slow { animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+      @keyframes glow {
+        0% { box-shadow: 0 0 5px #00f0ff; }
+        100% { box-shadow: 0 0 20px #00f0ff, 0 0 10px #00f0ff; }
       }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #374151; 
+      .animate-glow { animation: glow 2s ease-in-out infinite alternate; }
+      
+      @keyframes bounce-short {
+        0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
+        50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
       }
+      .animate-bounce-short { animation: bounce-short 1s infinite; }
+      
+      /* Safe area padding fallback */
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
     </style>
   <script type="importmap">
 {
