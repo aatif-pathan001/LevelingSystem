@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "Represents the player state, RPG attributes, levels, titles, custom quests, and sync status.",
+      "type": "object",
+      "properties": {
+        "currentLevel": { "type": "integer" },
+        "playerLevel": { "type": "integer" },
+        "exp": { "type": "integer" },
+        "maxExp": { "type": "integer" },
+        "completedQuests": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "customQuests": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "str": { "type": "integer" },
+            "int": { "type": "integer" },
+            "wis": { "type": "integer" },
+            "agi": { "type": "integer" },
+            "gld": { "type": "integer" }
+          }
+        },
+        "rank": { "type": "string" },
+        "jobClass": { "type": "string" },
+        "inventoryAcquired": { "type": "boolean" },
+        "acquiredInventory": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unallocatedStats": { "type": "integer" },
+        "syncCode": { "type": "string" },
+        "autoSync": { "type": "boolean" },
+        "targetGoal": { "type": "string" },
+        "architectProgress": { "type": "integer" },
+        "architectVerdict": { "type": "string" },
+        "architectAnalysis": { "type": "string" },
+        "currentTitle": { "type": "string" },
+        "titleDescription": { "type": "string" },
+        "unlockedTitles": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      },
+      "required": ["currentLevel", "playerLevel", "exp", "maxExp", "completedQuests", "customQuests", "stats", "rank", "jobClass"]
+    }
+  },
+  "firestore": {
+    "/player_profiles/{profileId}": {
+      "schema": "PlayerProfile",
+      "description": "Cross-device synchronized solo leveling profile states"
+    }
+  }
+}

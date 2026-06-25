@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Layers, Menu, Terminal, Plus, ListTodo, AlertTriangle, RefreshCw, Sun, Cloud, Copy, Link, Unlink } from 'lucide-react';
+import { User, Layers, Menu, Terminal, Plus, ListTodo, AlertTriangle, RefreshCw, Sun, Cloud, Copy, Link, Unlink, Cpu } from 'lucide-react';
 import { loadState, saveState, calculateMaxExp, DEFAULT_STATE } from './utils/storage';
 import { PlayerState, Quest, QuestType, QuestAttributes, Stats, LevelData } from './types';
 import { LEVELS, QUEST_EXP_MULTIPLIERS } from './constants';
@@ -7,10 +7,11 @@ import LevelView from './components/LevelView';
 import StatsRadar from './components/StatsRadar';
 import QuestItem from './components/QuestItem';
 import { saveProfileToCloud, loadProfileFromCloud, generateSyncCode } from './utils/firebase';
+import ArchitectGateway from './components/ArchitectGateway';
 
 const App = () => {
   const [playerState, setPlayerState] = useState<PlayerState>(loadState());
-  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'STATUS'>('SYSTEM');
+  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'ARCHITECT' | 'STATUS'>('SYSTEM');
   const [levelCompleteData, setLevelCompleteData] = useState<LevelData | null>(null);
   const [showPlayerLevelUp, setShowPlayerLevelUp] = useState<number | null>(null);
   
@@ -326,35 +327,26 @@ const App = () => {
       setSyncMessage('Generating sync link...');
       const code = generateSyncCode();
       
-      // Update state
-      setPlayerState(prev => {
-        const updated = {
-          ...prev,
-          syncCode: code,
-          autoSync: true
-        };
-        // Also upload this updated state to cloud immediately
-        saveProfileToCloud(code, updated)
-          .then(() => {
-            setSyncState('success');
-            setSyncMessage(`LINK ESTABLISHED: ${code}`);
-            setTimeout(() => {
-              setSyncState('idle');
-              setSyncMessage('');
-            }, 3000);
-          })
-          .catch(err => {
-            console.error("Cloud upload error during initialization:", err);
-            setSyncState('error');
-            setSyncMessage('Failed to initialize cloud database.');
-            setTimeout(() => setSyncState('idle'), 4000);
-          });
-        return updated;
-      });
-    } catch (e) {
-      console.error(e);
+      const updated = {
+        ...playerState,
+        syncCode: code,
+        autoSync: true
+      };
+
+      await saveProfileToCloud(code, updated);
+      
+      setPlayerState(updated);
+      setSyncState('success');
+      setSyncMessage(`LINK ESTABLISHED: ${code}`);
+      setTimeout(() => {
+        setSyncState('idle');
+        setSyncMessage('');
+      }, 3000);
+    } catch (err) {
+      console.error("Cloud upload error during initialization:", err);
       setSyncState('error');
-      setSyncMessage('Failed to generate sync code.');
+      setSyncMessage('Failed to initialize cloud database.');
+      setTimeout(() => setSyncState('idle'), 4000);
     }
   };
 
@@ -723,6 +715,14 @@ const App = () => {
           </>
         )}
 
+        {activeTab === 'ARCHITECT' && (
+          <ArchitectGateway 
+            playerState={playerState}
+            setPlayerState={setPlayerState}
+            effectiveStats={effectiveStats}
+          />
+        )}
+
         {activeTab === 'STATUS' && (
           <div className="space-y-6">
              <div className="bg-system-panel border border-system-border p-6 rounded-xl relative overflow-hidden">
@@ -1017,6 +1017,14 @@ const App = () => {
           >
             <Layers className="w-6 h-6 mb-1" />
             <span className="text-xxs font-mono tracking-widest">SYSTEM</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('ARCHITECT')}
+            className={`flex flex-col items-center justify-center w-full h-full transition-colors ${activeTab === 'ARCHITECT' ? 'text-system-blue' : 'text-gray-600 hover:text-gray-400'}`}
+          >
+            <Cpu className="w-6 h-6 mb-1" />
+            <span className="text-xxs font-mono tracking-widest">ARCHITECT</span>
           </button>
 
           <button 
