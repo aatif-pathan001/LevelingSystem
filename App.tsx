@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { User, Layers, Menu, Terminal, Plus, ListTodo, AlertTriangle, RefreshCw, Sun, ShoppingBag } from 'lucide-react';
+import { User, Layers, Menu, Terminal, Plus, ListTodo, AlertTriangle, RefreshCw, Sun, Cloud, Copy, Link, Unlink } from 'lucide-react';
 import { loadState, saveState, calculateMaxExp, DEFAULT_STATE } from './utils/storage';
 import { PlayerState, Quest, QuestType, QuestAttributes, Stats, LevelData } from './types';
-import { LEVELS, QUEST_EXP_MULTIPLIERS, INVENTORY_ITEMS } from './constants';
-import InventoryScreen from './components/InventoryScreen';
+import { LEVELS, QUEST_EXP_MULTIPLIERS } from './constants';
 import LevelView from './components/LevelView';
 import StatsRadar from './components/StatsRadar';
 import QuestItem from './components/QuestItem';
+import { saveProfileToCloud, loadProfileFromCloud, generateSyncCode } from './utils/firebase';
 
 const App = () => {
   const [playerState, setPlayerState] = useState<PlayerState>(loadState());
-  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'STATUS' | 'INVENTORY'>('SYSTEM');
+  const [activeTab, setActiveTab] = useState<'SYSTEM' | 'STATUS'>('SYSTEM');
   const [levelCompleteData, setLevelCompleteData] = useState<LevelData | null>(null);
   const [showPlayerLevelUp, setShowPlayerLevelUp] = useState<number | null>(null);
   
@@ -30,8 +30,33 @@ const App = () => {
   const [carryOverCandidates, setCarryOverCandidates] = useState<Quest[] | null>(null);
   const [selectedCarryOverIds, setSelectedCarryOverIds] = useState<string[]>([]);
 
+  // Cloud Sync States
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [inputSyncCode, setInputSyncCode] = useState('');
+  const [syncMessage, setSyncMessage] = useState('');
+
+  // Calculate dynamic stats based on base stats
+  const getEffectiveStats = (state: PlayerState): Stats => {
+    return { ...state.stats };
+  };
+
+  const effectiveStats = getEffectiveStats(playerState);
+
   useEffect(() => {
     saveState(playerState);
+    if (playerState.syncCode && playerState.autoSync) {
+      setSyncState('syncing');
+      saveProfileToCloud(playerState.syncCode, playerState)
+        .then(() => {
+          setSyncState('success');
+          setTimeout(() => setSyncState('idle'), 2500);
+        })
+        .catch(err => {
+          console.error("Auto sync failed:", err);
+          setSyncState('error');
+          setTimeout(() => setSyncState('idle'), 4000);
+        });
+    }
   }, [playerState]);
 
   const handleQuestToggle = (questId: string, type: QuestType) => {
@@ -52,12 +77,20 @@ const App = () => {
            const multiplier = QUEST_EXP_MULTIPLIERS[type] || 0;
            expValue = multiplier * prev.playerLevel;
       }
+
+      // Gold rewards based on quest type
+      let goldReward = 0;
+      if (type === QuestType.DAILY) goldReward = 2;
+      else if (type === QuestType.SIDE) goldReward = 5;
+      else if (type === QuestType.COMBAT || type === QuestType.MAIN) goldReward = 10;
+      else if (type === QuestType.BOSS) goldReward = 25;
       
       let newCompleted;
       let newExp = prev.exp;
       let newPlayerLevel = prev.playerLevel;
       let newMaxExp = prev.maxExp;
       let newUnallocatedStats = prev.unallocatedStats;
+      let newSkillPoints = prev.skillPoints;
       let newStats = { ...prev.stats };
       let leveledUp = false;
 
@@ -65,6 +98,7 @@ const App = () => {
         // Toggle OFF (Undo)
         newCompleted = prev.completedQuests.filter(id => id !== questId);
         newExp = Math.max(0, prev.exp - expValue);
+        newStats.gld = Math.max(0, newStats.gld - goldReward);
         
         // Revert Stat Rewards (Only if they exist on the quest)
         if (customQuest && customQuest.rewardStats) {
@@ -76,6 +110,7 @@ const App = () => {
         // Toggle ON (Complete)
         newCompleted = [...prev.completedQuests, questId];
         newExp = prev.exp + expValue;
+        newStats.gld = newStats.gld + goldReward;
         
         // Apply Stat Rewards (Only if they exist on the quest)
         if (customQuest && customQuest.rewardStats) {
@@ -91,8 +126,10 @@ const App = () => {
            newExp = newExp - prev.maxExp;
            newMaxExp = calculateMaxExp(newPlayerLevel);
            
-           // Grant Stat Points (3 points per level)
+           // Grant Stat Points (3 points per level) & Skill Points (1 point per level)
            newUnallocatedStats += 3;
+           newSkillPoints += 1;
+           newStats.gld += 10; // Level up gold bonus
         }
       }
       
@@ -108,6 +145,7 @@ const App = () => {
         playerLevel: newPlayerLevel,
         maxExp: newMaxExp,
         unallocatedStats: newUnallocatedStats,
+        skillPoints: newSkillPoints,
         stats: newStats
       };
     });
@@ -127,11 +165,16 @@ const App = () => {
            const multiplier = QUEST_EXP_MULTIPLIERS[QuestType.DAILY] || 0;
            expValue = multiplier * prev.playerLevel;
       }
+
+      // Gold reward for daily repeat
+      let goldReward = 2;
       
       let newExp = prev.exp + expValue;
       let newPlayerLevel = prev.playerLevel;
       let newMaxExp = prev.maxExp;
       let newUnallocatedStats = prev.unallocatedStats;
+      let newSkillPoints = prev.skillPoints;
+      let newStats = { ...prev.stats, gld: prev.stats.gld + goldReward };
       let leveledUp = false;
       
       // Level Up Logic
@@ -141,8 +184,10 @@ const App = () => {
          newExp = newExp - prev.maxExp;
          newMaxExp = calculateMaxExp(newPlayerLevel);
          
-         // Grant Stat Points (3 points per level)
+         // Grant Stat Points (3 points per level) & Skill Points (1 point per level)
          newUnallocatedStats += 3;
+         newSkillPoints += 1;
+         newStats.gld += 10; // Level up gold bonus
       }
       
       if (leveledUp) {
@@ -155,7 +200,9 @@ const App = () => {
         exp: newExp,
         playerLevel: newPlayerLevel,
         maxExp: newMaxExp,
-        unallocatedStats: newUnallocatedStats
+        unallocatedStats: newUnallocatedStats,
+        skillPoints: newSkillPoints,
+        stats: newStats
       };
     });
   };
@@ -273,23 +320,163 @@ const App = () => {
     executeLevelUp(newQuests);
   };
 
-  const handleInventoryToggle = (itemName: string) => {
-    setPlayerState(prev => {
-        const currentList = prev.acquiredInventory || [];
-        const newList = currentList.includes(itemName)
-            ? currentList.filter(i => i !== itemName)
-            : [...currentList, itemName];
-        
-        // Auto-update legacy flag if all Level 1 mandatory items are acquired
-        const level1Mandatory = INVENTORY_ITEMS.filter(i => i.unlockLevel === 1 && i.mandatory);
-        const isLevel1Complete = level1Mandatory.every(i => newList.includes(i.name));
-
-        return {
-            ...prev,
-            acquiredInventory: newList,
-            inventoryAcquired: isLevel1Complete
+  const handleGenerateSyncCode = async () => {
+    try {
+      setSyncState('syncing');
+      setSyncMessage('Generating sync link...');
+      const code = generateSyncCode();
+      
+      // Update state
+      setPlayerState(prev => {
+        const updated = {
+          ...prev,
+          syncCode: code,
+          autoSync: true
         };
-    });
+        // Also upload this updated state to cloud immediately
+        saveProfileToCloud(code, updated)
+          .then(() => {
+            setSyncState('success');
+            setSyncMessage(`LINK ESTABLISHED: ${code}`);
+            setTimeout(() => {
+              setSyncState('idle');
+              setSyncMessage('');
+            }, 3000);
+          })
+          .catch(err => {
+            console.error("Cloud upload error during initialization:", err);
+            setSyncState('error');
+            setSyncMessage('Failed to initialize cloud database.');
+            setTimeout(() => setSyncState('idle'), 4000);
+          });
+        return updated;
+      });
+    } catch (e) {
+      console.error(e);
+      setSyncState('error');
+      setSyncMessage('Failed to generate sync code.');
+    }
+  };
+
+  const handleLinkSyncCode = async () => {
+    const code = inputSyncCode.trim().toUpperCase();
+    if (!code) {
+      setSyncMessage('Please enter a valid sync code.');
+      return;
+    }
+    
+    try {
+      setSyncState('syncing');
+      setSyncMessage('Querying Cloud Gateway...');
+      const cloudData = await loadProfileFromCloud(code);
+      
+      if (!cloudData) {
+        setSyncState('error');
+        setSyncMessage('Sync Code not found on server.');
+        setTimeout(() => setSyncState('idle'), 3000);
+        return;
+      }
+      
+      const confirmLoad = window.confirm(`CLOUD PROFILE FOUND!\n\nSync Code: ${code}\nLevel: ${cloudData.playerLevel || 1}\n\nLoading this will overwrite your current device's local state. Do you want to continue?`);
+      if (confirmLoad) {
+        // Prepare the loaded state correctly
+        const loadedState: PlayerState = {
+          ...DEFAULT_STATE,
+          ...cloudData,
+          syncCode: code,
+          autoSync: true
+        };
+        setPlayerState(loadedState);
+        setSyncState('success');
+        setSyncMessage('SYSTEM SYNC COMPLETED SUCCESSFULLY!');
+        setInputSyncCode('');
+        setTimeout(() => {
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 3000);
+      } else {
+        setSyncState('idle');
+        setSyncMessage('');
+      }
+    } catch (err) {
+      console.error("Link error:", err);
+      setSyncState('error');
+      setSyncMessage('Connection to Cloud Core failed.');
+      setTimeout(() => setSyncState('idle'), 3000);
+    }
+  };
+
+  const handleManualPush = async () => {
+    if (!playerState.syncCode) return;
+    try {
+      setSyncState('syncing');
+      setSyncMessage('Pushing local state to Cloud...');
+      await saveProfileToCloud(playerState.syncCode, playerState);
+      setSyncState('success');
+      setSyncMessage('State backup complete!');
+      setTimeout(() => {
+        setSyncState('idle');
+        setSyncMessage('');
+      }, 2500);
+    } catch (err) {
+      console.error(err);
+      setSyncState('error');
+      setSyncMessage('Failed to push state.');
+      setTimeout(() => setSyncState('idle'), 3000);
+    }
+  };
+
+  const handleManualPull = async () => {
+    if (!playerState.syncCode) return;
+    try {
+      setSyncState('syncing');
+      setSyncMessage('Fetching cloud data...');
+      const cloudData = await loadProfileFromCloud(playerState.syncCode);
+      if (!cloudData) {
+        setSyncState('error');
+        setSyncMessage('No cloud data found for this code.');
+        setTimeout(() => setSyncState('idle'), 3000);
+        return;
+      }
+      
+      const confirmLoad = window.confirm(`PULL CLOUD DATA?\n\nThis will replace your current local state with the cloud backup from ${cloudData.lastSyncedAt ? new Date(cloudData.lastSyncedAt).toLocaleString() : 'recently'}.\n\nContinue?`);
+      if (confirmLoad) {
+        setPlayerState(prev => ({
+          ...prev,
+          ...cloudData,
+          syncCode: prev.syncCode, // keep current code
+          autoSync: true
+        }));
+        setSyncState('success');
+        setSyncMessage('Cloud data loaded!');
+        setTimeout(() => {
+          setSyncState('idle');
+          setSyncMessage('');
+        }, 2500);
+      } else {
+        setSyncState('idle');
+        setSyncMessage('');
+      }
+    } catch (err) {
+      console.error(err);
+      setSyncState('error');
+      setSyncMessage('Failed to pull state.');
+      setTimeout(() => setSyncState('idle'), 3000);
+    }
+  };
+
+  const handleUnlinkSync = () => {
+    const confirmUnlink = window.confirm(`UNLINK SYSTEM?\n\nAre you sure you want to unlink your device? This will stop auto-saving to the cloud, but your backup remains safe under your current Sync Code.\n\nMake sure you have copied your code!`);
+    if (confirmUnlink) {
+      setPlayerState(prev => ({
+        ...prev,
+        syncCode: '',
+        autoSync: false
+      }));
+      setSyncState('idle');
+      setSyncMessage('Device unlinked.');
+      setTimeout(() => setSyncMessage(''), 2500);
+    }
   };
 
   const handleAddCustomQuest = () => {
@@ -331,7 +518,6 @@ const App = () => {
 
   const handleSystemReset = () => {
     if (window.confirm("SYSTEM ALERT:\n\nAre you sure you want to perform a SYSTEM RESET?\nThis will permanently delete all progress, stats, and quests.\n\nThe system will restart at Level 1.")) {
-      // Soft reset to Level 1, inventory logic reset
       const resetState: PlayerState = {
          ...DEFAULT_STATE,
          inventoryAcquired: false,
@@ -545,7 +731,7 @@ const App = () => {
                 </div>
                 <h2 className="text-system-blue font-mono font-bold text-xl mb-6 tracking-widest border-b border-gray-800 pb-2">STATUS</h2>
                 
-                <StatsRadar stats={playerState.stats} />
+                <StatsRadar stats={effectiveStats} />
 
                 {playerState.unallocatedStats > 0 && (
                    <div className="mt-4 text-center animate-pulse">
@@ -558,7 +744,14 @@ const App = () => {
                 <div className="grid grid-cols-2 gap-4 mt-6 text-center">
                   <div className="bg-black bg-opacity-40 p-3 rounded border border-gray-800 relative group">
                     <div className="text-xxs text-gray-500 font-mono">STR</div>
-                    <div className="text-2xl font-bold text-white">{playerState.stats.str}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {effectiveStats.str}
+                      {effectiveStats.str > playerState.stats.str && (
+                        <span className="text-xs text-system-blue ml-1 font-mono font-bold">
+                          (+{effectiveStats.str - playerState.stats.str})
+                        </span>
+                      )}
+                    </div>
                     {playerState.unallocatedStats > 0 && (
                       <button 
                         onClick={() => handleStatIncrease('str')}
@@ -570,7 +763,14 @@ const App = () => {
                   </div>
                   <div className="bg-black bg-opacity-40 p-3 rounded border border-gray-800 relative group">
                     <div className="text-xxs text-gray-500 font-mono">AGI</div>
-                    <div className="text-2xl font-bold text-white">{playerState.stats.agi}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {effectiveStats.agi}
+                      {effectiveStats.agi > playerState.stats.agi && (
+                        <span className="text-xs text-system-blue ml-1 font-mono font-bold">
+                          (+{effectiveStats.agi - playerState.stats.agi})
+                        </span>
+                      )}
+                    </div>
                     {playerState.unallocatedStats > 0 && (
                       <button 
                         onClick={() => handleStatIncrease('agi')}
@@ -582,7 +782,14 @@ const App = () => {
                   </div>
                   <div className="bg-black bg-opacity-40 p-3 rounded border border-gray-800 relative group">
                     <div className="text-xxs text-gray-500 font-mono">INT</div>
-                    <div className="text-2xl font-bold text-white">{playerState.stats.int}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {effectiveStats.int}
+                      {effectiveStats.int > playerState.stats.int && (
+                        <span className="text-xs text-system-blue ml-1 font-mono font-bold">
+                          (+{effectiveStats.int - playerState.stats.int})
+                        </span>
+                      )}
+                    </div>
                     {playerState.unallocatedStats > 0 && (
                       <button 
                         onClick={() => handleStatIncrease('int')}
@@ -594,7 +801,14 @@ const App = () => {
                   </div>
                   <div className="bg-black bg-opacity-40 p-3 rounded border border-gray-800 relative group">
                     <div className="text-xxs text-gray-500 font-mono">WIS</div>
-                    <div className="text-2xl font-bold text-white">{playerState.stats.wis}</div>
+                    <div className="text-2xl font-bold text-white">
+                      {effectiveStats.wis}
+                      {effectiveStats.wis > playerState.stats.wis && (
+                        <span className="text-xs text-system-blue ml-1 font-mono font-bold">
+                          (+{effectiveStats.wis - playerState.stats.wis})
+                        </span>
+                      )}
+                    </div>
                      {playerState.unallocatedStats > 0 && (
                       <button 
                         onClick={() => handleStatIncrease('wis')}
@@ -619,6 +833,168 @@ const App = () => {
                )}
              </div>
 
+             {/* CLOUD SYNC & BACKUP */}
+             <div className="bg-system-panel border border-system-border p-6 rounded-xl relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4 border-b border-gray-900 pb-3">
+                  <div>
+                    <h3 className="text-system-blue font-mono font-bold text-sm tracking-widest uppercase flex items-center gap-2">
+                      <Cloud className={`w-4 h-4 ${syncState === 'syncing' ? 'animate-bounce text-system-blue' : 'text-gray-400'}`} />
+                      CLOUD SYSTEM LINK
+                    </h3>
+                    <p className="text-xxs text-gray-500 font-mono mt-1">CROSS-DEVICE SYNCHRONIZATION</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {syncState === 'syncing' && (
+                      <span className="text-xxs font-mono text-system-blue animate-pulse flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> SYNCING
+                      </span>
+                    )}
+                    {syncState === 'success' && (
+                      <span className="text-xxs font-mono text-green-400 flex items-center gap-1">
+                        ● CONNECTED
+                      </span>
+                    )}
+                    {syncState === 'error' && (
+                      <span className="text-xxs font-mono text-system-danger flex items-center gap-1">
+                        ● SYNC ERROR
+                      </span>
+                    )}
+                    {syncState === 'idle' && playerState.syncCode && (
+                      <span className="text-xxs font-mono text-system-blue flex items-center gap-1">
+                        ● CLOUD SAVED
+                      </span>
+                    )}
+                    {syncState === 'idle' && !playerState.syncCode && (
+                      <span className="text-xxs font-mono text-gray-600 flex items-center gap-1">
+                        ○ LOCAL ONLY
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {syncMessage && (
+                  <div className={`p-3 rounded-lg font-mono text-xxs mb-4 text-center border ${
+                    syncState === 'error' ? 'bg-system-danger-10 border-system-danger text-system-danger' : 
+                    syncState === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-black border-gray-800 text-system-blue animate-pulse'
+                  }`}>
+                    {syncMessage}
+                  </div>
+                )}
+
+                {playerState.syncCode ? (
+                  <div className="space-y-4">
+                    <div className="bg-black bg-opacity-60 border border-gray-900 p-3 rounded-lg flex flex-col items-center justify-center text-center">
+                      <span className="text-xxs text-gray-500 font-mono mb-1">YOUR EXCLUSIVE SYSTEM KEY</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold font-mono text-white tracking-widest bg-gray-900 px-3 py-1 rounded border border-gray-800 select-all">
+                          {playerState.syncCode}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(playerState.syncCode || '');
+                            setSyncMessage('SYSTEM KEY COPIED TO CLIPBOARD!');
+                            setTimeout(() => setSyncMessage(''), 2000);
+                          }}
+                          className="p-1.5 rounded bg-gray-900 border border-gray-800 hover:border-system-blue text-gray-400 hover:text-system-blue transition-colors"
+                          title="Copy Key"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-500 leading-relaxed mt-2.5 max-w-xs">
+                        Enter this key on any phone, tablet, or PC to instant-sync your levels, experience, and custom quests.
+                      </p>
+                    </div>
+
+                    {/* Auto Sync Toggle */}
+                    <div className="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg border border-gray-900">
+                      <div>
+                        <span className="text-xs font-bold text-gray-300 block">REALTIME AUTO-SYNC</span>
+                        <span className="text-[10px] text-gray-500 font-mono">Backs up changes on every action</span>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const nextVal = !playerState.autoSync;
+                          setPlayerState(prev => ({ ...prev, autoSync: nextVal }));
+                          if (nextVal) {
+                            setSyncState('syncing');
+                            saveProfileToCloud(playerState.syncCode || '', { ...playerState, autoSync: nextVal })
+                              .then(() => setSyncState('success'))
+                              .catch(() => setSyncState('error'));
+                          }
+                        }}
+                        className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 relative ${playerState.autoSync ? 'bg-system-blue' : 'bg-gray-800'}`}
+                      >
+                        <div className={`bg-white w-5 h-5 rounded-full shadow-md transform duration-200 ease-in-out ${playerState.autoSync ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+
+                    {/* Manual Sync Control Buttons */}
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <button 
+                        onClick={handleManualPush}
+                        disabled={syncState === 'syncing'}
+                        className="py-2 border border-gray-800 rounded font-mono text-xxs font-bold text-gray-300 hover:border-system-blue hover:text-system-blue transition-colors flex items-center justify-center gap-1 bg-black bg-opacity-30"
+                      >
+                        <RefreshCw className="w-3 h-3" /> PUSH BACKUP
+                      </button>
+                      <button 
+                        onClick={handleManualPull}
+                        disabled={syncState === 'syncing'}
+                        className="py-2 border border-gray-800 rounded font-mono text-xxs font-bold text-gray-300 hover:border-system-blue hover:text-system-blue transition-colors flex items-center justify-center gap-1 bg-black bg-opacity-30"
+                      >
+                        <RefreshCw className="w-3 h-3 rotate-180" /> PULL BACKUP
+                      </button>
+                    </div>
+
+                    {/* Unlink Button */}
+                    <button 
+                      onClick={handleUnlinkSync}
+                      className="w-full py-2 border border-dashed border-gray-800 hover:border-system-danger-50 text-gray-500 hover:text-system-danger transition-colors flex items-center justify-center gap-1.5 mt-2 text-xxs font-mono"
+                    >
+                      <Unlink className="w-3 h-3" /> DISCONNECT SYSTEM LINK
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Your progress is currently saved in your browser's Local Storage. Link your device to the Cloud Gateway to enable secure cross-device synchronization and automatic cloud backups.
+                    </p>
+
+                    <div className="bg-black bg-opacity-40 border border-gray-800 p-4 rounded-lg space-y-3">
+                      <span className="block text-[10px] font-mono text-gray-500 tracking-wider">RESTORE OR LINK DEVICE</span>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text"
+                          value={inputSyncCode}
+                          onChange={(e) => setInputSyncCode(e.target.value)}
+                          placeholder="HUNTER-XXXX-XXXX"
+                          className="bg-black border border-gray-800 focus:border-system-blue text-xs text-white font-mono px-3 py-2 rounded-lg flex-1 outline-none uppercase placeholder:text-gray-750 placeholder:font-sans"
+                        />
+                        <button 
+                          onClick={handleLinkSyncCode}
+                          disabled={syncState === 'syncing'}
+                          className="bg-system-blue hover:bg-white text-black font-bold font-mono text-xxs px-4 rounded-lg flex items-center gap-1 transition-colors uppercase"
+                        >
+                          <Link className="w-3 h-3" /> LINK
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      <span className="block text-xxs text-gray-600 font-mono mb-2">OR START A NEW SYNC PROFILE</span>
+                      <button 
+                        onClick={handleGenerateSyncCode}
+                        disabled={syncState === 'syncing'}
+                        className="w-full py-3 border border-system-blue-50 hover:border-system-blue bg-system-blue-5 hover:bg-system-blue-10 text-system-blue text-xs font-mono font-bold tracking-widest uppercase transition-colors rounded-xl flex items-center justify-center gap-2"
+                      >
+                        <Cloud className="w-4 h-4 animate-pulse" /> GENERATE NEW LINK CODE
+                      </button>
+                    </div>
+                  </div>
+                )}
+             </div>
+
              <div className="mt-8 pt-6 border-t border-gray-900">
                 <button 
                   onClick={handleSystemReset}
@@ -630,13 +1006,6 @@ const App = () => {
           </div>
         )}
 
-        {activeTab === 'INVENTORY' && (
-            <InventoryScreen 
-                acquiredItems={playerState.acquiredInventory}
-                onToggleItem={handleInventoryToggle}
-                currentLevel={playerState.currentLevel}
-            />
-        )}
       </main>
 
       {/* Bottom Navigation */}
@@ -648,14 +1017,6 @@ const App = () => {
           >
             <Layers className="w-6 h-6 mb-1" />
             <span className="text-xxs font-mono tracking-widest">SYSTEM</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('INVENTORY')}
-            className={`flex flex-col items-center justify-center w-full h-full transition-colors ${activeTab === 'INVENTORY' ? 'text-system-blue' : 'text-gray-600 hover:text-gray-400'}`}
-          >
-            <ShoppingBag className="w-6 h-6 mb-1" />
-            <span className="text-xxs font-mono tracking-widest">INV</span>
           </button>
 
           <button 

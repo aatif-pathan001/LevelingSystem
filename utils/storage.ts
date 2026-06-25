@@ -23,12 +23,22 @@ export const DEFAULT_STATE: PlayerState = {
   maxExp: calculateMaxExp(1),
   completedQuests: [],
   customQuests: [],
-  stats: INITIAL_STATS,
+  stats: { ...INITIAL_STATS, gld: 30 }, // Give 30 starting gold
   rank: 'E-RANK (Pending)',
   jobClass: 'NONE',
   inventoryAcquired: false,
   acquiredInventory: [],
   unallocatedStats: 0,
+  skills: {},
+  skillPoints: 0,
+  ownedRPGItems: [],
+  equippedGear: {
+    WEAPON: null,
+    ARMOR: null,
+    ACCESSORY: null
+  },
+  syncCode: '',
+  autoSync: false
 };
 
 export const loadState = (): PlayerState => {
@@ -75,6 +85,14 @@ export const loadState = (): PlayerState => {
         acquiredInventory = INVENTORY_ITEMS.filter(i => i.unlockLevel === 1).map(i => i.name);
     }
 
+    // Solo Leveling RPG Migrations
+    const skills = parsed.skills || {};
+    const skillPoints = parsed.skillPoints !== undefined ? Number(parsed.skillPoints) : 0;
+    const ownedRPGItems = Array.isArray(parsed.ownedRPGItems) ? parsed.ownedRPGItems : [];
+    const equippedGear = parsed.equippedGear || { WEAPON: null, ARMOR: null, ACCESSORY: null };
+    const syncCode = parsed.syncCode || '';
+    const autoSync = parsed.autoSync !== undefined ? !!parsed.autoSync : false;
+
     return {
       ...DEFAULT_STATE,
       ...parsed,
@@ -87,7 +105,13 @@ export const loadState = (): PlayerState => {
       unallocatedStats,
       jobClass,
       inventoryAcquired,
-      acquiredInventory
+      acquiredInventory,
+      skills,
+      skillPoints,
+      ownedRPGItems,
+      equippedGear,
+      syncCode,
+      autoSync
     };
   } catch (e) {
     console.error("Failed to load state", e);

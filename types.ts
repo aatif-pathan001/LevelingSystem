@@ -58,6 +58,47 @@ export interface PlayerState {
   inventoryAcquired: boolean;
   acquiredInventory: string[]; // Array of Inventory Item names
   unallocatedStats: number;
+  // Solo Leveling RPG Additions
+  skills: Record<string, number>; // Maps skill ID to level
+  skillPoints: number; // Unallocated skill points for the Skill Tree
+  ownedRPGItems: string[]; // IDs of purchased/looted items
+  equippedGear: {
+    WEAPON: string | null;
+    ARMOR: string | null;
+    ACCESSORY: string | null;
+  };
+  syncCode?: string;
+  autoSync?: boolean;
+}
+
+export enum EquipSlot {
+  WEAPON = 'WEAPON',
+  ARMOR = 'ARMOR',
+  ACCESSORY = 'ACCESSORY'
+}
+
+export interface RPGItem {
+  id: string;
+  name: string;
+  description: string;
+  slot: EquipSlot;
+  statModifiers: Partial<Stats>;
+  rarity: 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
+  unlockLevel: number;
+  gldCost: number;
+  iconName: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  type: 'ACTIVE' | 'PASSIVE';
+  maxLevel: number;
+  reqPlayerLevel: number;
+  costPerLevel: number;
+  statModifiersPerLevel: Partial<Stats>;
+  iconName: string;
 }
 
 export interface InventoryItem {
